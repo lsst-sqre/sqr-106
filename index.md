@@ -39,6 +39,63 @@ This stage requires some time to run, but it is still much cheaper than doing a 
 The plan, therefore, was to structure the workflow like this ![workflow for multiplatform build](./assets/workflow.png).
 The two build stages (one per architecture) happen in parallel, and the manifest is assembled only once each is built.
 
+### Manifests
+
+The most usual way of creating multi-architecture containers is to simply use `docker buildx` with the `--platform` argument to specify multiple target architectures.
+Presumably the supposition is that most sites have only one architecture physically available, and thus they're going to have to pay the emulation penalty.
+
+A Docker manifest is a document that describes a checksum that uniquely identifies a particular image; that image, when referenced by the checksum, will contain a collection of layers, which can be stacked to make the runtime environment of the container.
+All Docker images have a manifest.
+Generally, producers of Docker images do not work directly with the manifest, but leave it to the build tool.
+
+A [multi-architecture manifest file](https://docs.docker.com/build/building/multi-platform/) contains a list of single-image manifests; thus when a registry is asked for a particular image, that request comes with an architecture specification attached, and the right flavor can be pulled from the manifest and its layers delivered to the requestor.
+
+That looks like this (with only the first architecture shown):
+
+```
+{
+   "schemaVersion": 2,
+   "mediaType": "application/vnd.oci.image.index.v1+json",
+   "manifests": [
+      {
+         "mediaType": "application/vnd.oci.image.manifest.v1+json",
+         "digest": "sha256:8c4c7c75f3d1e7bac0612afe6e342dcfdccab4b0cb3040b56adb270c06784450",
+         "size": 12003,
+         "platform": {
+            "architecture": "amd64",
+            "os": "linux"
+         }
+      },
+	  ...
+  ]
+}
+```
+
+Docker also provides the `docker manifest` command, which does allow direct manipulation of manifest entries.
+This is how we create multiplatform containers: we create a pair of single-image containers, and then generate a manifest unifying both of them (via their checksums) into a single reference.
+At pull time, the registry, based on the requested architecture, delivers the correct sequence of layers for that architecture.
+
+There is a handy preexisting GitHub action, [docker-manifest-action](https://github.com/Noelware/docker-manifest-action), which makes it very simple to specify input and output image specifications, and which does all the work of resolving the input tags and stitching together and pushing the multiplatform manifest.
+This is what we use after having built our single-platform images to create a multiplatform image.
+
+### Manipulating Image Tags
+
+One thing that is not apparent but is a consequence of the matrixed, parallelized approach plus the `docker manifest` step, is that we are now creating three times as many tags.
+For each tag we really want (e.g. `tickets-DM-52589`), we create (in the matrixed build step) both `tickets-DM-52589-amd64` and `tickets-DM-52589-arm64` and push those to the registry.
+The `tickets-DM-52589` tag is created by the `docker manifest` step that stitches together the two architecture-specific tags into a generic tag.
+
+This required some work in [Nublado](https://github.com/lsst-sqre/nublado) in order to hide the architecture-specific tags from the JupyterHub spawner menu.
+
+### Machine architecture names and Docker platform specifications
+
+In the above manifest, the `architecture` field is `amd64`; we use that and `arm64`.
+These are simply Docker's names for the relevant architectures.
+Others exist (e.g `s390x`, `riscv64`) but we don't currently have any plans to support those architectures.
+Docker also supports other operating systems and internally represents the platform as `os/architecture`, e.g. `linux/arm64` or `windows/amd64`.
+We currently do not support anything but `linux` as our container OS.
+`arm64` is a very generic term, and refers to the ARM v8 or later architecture.
+At some point there may well be something like `arm64/v9` (analogous to the existing 32-bit `arm/v7`), but that does not appear to exist yet.
+
 ### Multi-registry pushes
 
 Some containers (notably sciplat-lab and its init containers) need to be hosted at Google Artifact Registry as well as at GitHub Container Registry in order to not rate-limit container pulls under heavy load.
@@ -61,13 +118,6 @@ This had to be a Reusable Workflow, rather than a Composite Action, because it c
 
 It just uses `docker buildx` with tags for multiple registries, and the `docker buildx build` stage handles the pushes.
 
-### Manipulating Image Tags
-
-One thing that is not apparent but is a consequence of the matrixed, parallelized approach plus the `docker manifest` step, is that we are now creating three times as many tags.
-For each tag we really want (e.g. `tickets-DM-52589`), we create (in the matrixed build step) both `tickets-DM-52589-amd64` and `tickets-DM-52589-arm64` and push those to the registry.
-The `tickets-DM-52589` tag is created by the `docker manifest` step that stitches together the two architecture-specific tags into a generic tag.
-
-This required some work in [Nublado](https://github.com/lsst-sqre/nublado) in order to hide the architecture-specific tags from the JupyterHub spawner menu.
 
 ## Instantiation
 
