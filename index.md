@@ -129,7 +129,7 @@ The developer simply finds the `build` `job` and replaces it with:
     uses: lsst-sqre/multiplatform-build-and-push/.github/workflows/build.yaml@v1
     needs: [test]
     with:
-      image: ghcr.io/${{ github.repository }}
+      images: ghcr.io/${{ github.repository }}
     secrets: inherit
     # Only do Docker builds of tagged releases and pull requests from ticket
     # branches. This will still trigger on pull requests from untrusted
