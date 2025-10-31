@@ -126,7 +126,7 @@ The developer simply finds the `build` `job` and replaces it with:
 
 ```yaml
   build:
-    uses: lsst-sqre/multiplatform-build-and-push/.github/workflows/build.yaml@v1
+    uses: lsst-sqre/multiplatform-build-and-push/.github/workflows/build.yaml@v2
     needs: [test]
     with:
       images: ghcr.io/${{ github.repository }}
@@ -144,11 +144,13 @@ The developer simply finds the `build` `job` and replaces it with:
 ```
 
 The only real differences from `build-and-push-to-ghcr` are:
+
 * The developer does not pass the GitHub Token directly, instead using `secrets: inherit`.
   This is necessary because the image might be pushed to multiple registries.
 * The developer needs to specify the registry host before the repository; usually this will be `ghcr.io`.
+
 If multiple registry hosts are needed, that is done by making the image string a comma-separated list, e.g `ghcr.io/${github.repository},us-central1.docker.pkg.dev/us-central1-docker.pkg.dev
-/rubin-shared-services-71ec/sciplat/${env.repo_name}` (where `repo_name` would have been set up to be the last component of `${github.repository}`, which, weirdly, is not exposed on its own via the `github` action context.
+/rubin-shared-services-71ec/sciplat/${env.repo_name}` (where `repo_name` would have been set up to be the last component of `${github.repository}`, which, weirdly, is not exposed on its own via the `github` action context).
 
 ## Impressive!
 
